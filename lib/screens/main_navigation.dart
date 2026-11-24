@@ -14,11 +14,24 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 2; // Default to Timer (middle icon) or 0 (Home)
+  int _currentIndex = 2;
+
+  String? _focusSubject;
+  int? _focusDurationMinutes;
+  int _focusRequestId = 0;
 
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
+    });
+  }
+
+  void _startFocusFromPlan(String subject, int durationMinutes) {
+    setState(() {
+      _focusSubject = subject;
+      _focusDurationMinutes = durationMinutes;
+      _focusRequestId++;
+      _currentIndex = 2;
     });
   }
 
@@ -27,8 +40,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final screens = [
       DashboardScreen(onNavigateTab: _onTabSelected),
       const ShopScreen(),
-      const TimerScreen(),
-      StudyPlanScreen(onNavigateTab: _onTabSelected),
+      TimerScreen(
+        focusSubject: _focusSubject,
+        focusDurationMinutes: _focusDurationMinutes,
+        focusRequestId: _focusRequestId,
+      ),
+      StudyPlanScreen(onStartFocus: _startFocusFromPlan),
       const ProfileScreen(),
     ];
 

@@ -6,6 +6,8 @@ import '../models/transaction.dart';
 import '../models/study_plan_item.dart';
 import '../models/reward_item.dart';
 import '../services/database_service.dart';
+import '../services/study_preferences_service.dart';
+import '../services/gemini_service.dart';
 
 class SubjectFocusStat {
   final String name;
@@ -125,6 +127,70 @@ class AppState extends ChangeNotifier {
   List<StudyPlanItem> get studyPlan => List.unmodifiable(_safeStudyPlan);
   List<RewardItem> get rewards => List.unmodifiable(_safeRewards);
   bool get isLoading => _isLoading;
+
+  Future<void> _saveStudyPlanToFirestore(String uid) async {
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'studyPlan': _safeStudyPlan.map((item) => item.toJson()).toList(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<bool> _loadStudyPlanFromFirestore(String uid) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    final data = doc.data();
+    final rawPlan = data?['studyPlan'];
+
+    if (rawPlan is! List || rawPlan.isEmpty) {
+      return false;
+    }
+
+    _studyPlan = rawPlan
+        .whereType<Map>()
+        .map(
+          (item) => StudyPlanItem.fromJson(
+        Map<String, dynamic>.from(item),
+      ),
+    )
+        .toList();
+
+    return _safeStudyPlan.isNotEmpty;
+  }
+
+  Future<void> generateAIStudyPlan() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw Exception('You must be logged in to generate a study plan.');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final preferences = await StudyPreferencesService().get(user.uid);
+
+      if (preferences == null) {
+        throw Exception('No study preferences found. Complete the study profile first.');
+      }
+
+      final generatedPlan = await GeminiService().generateWeeklyPlan(
+        preferences: preferences,
+      );
+
+      _studyPlan = generatedPlan;
+
+      await _saveStudyPlanToFirestore(user.uid);
+    } catch (e) {
+      debugPrint('AI study plan generation error: $e');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   /// Helper to format DateTime to 'YYYY-MM-DD'
   static String formatDateKey(DateTime date) {
@@ -430,7 +496,11 @@ class AppState extends ChangeNotifier {
               .toList();
         }
 
-        _generateStudyPlanFor(profile);
+        final hasSavedPlan = await _loadStudyPlanFromFirestore(uid);
+
+        if (!hasSavedPlan) {
+          _generateStudyPlanFor(profile);
+        }
       }
 
       // If recentTransactions wasn't stored in the user doc, fallback to subcollection

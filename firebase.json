@@ -1,1 +1,37 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"focusbank-2026","appId":"1:604347754233:android:9ed1e974b00f59347e2428","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"focusbank-2026","configurations":{"android":"1:604347754233:android:9ed1e974b00f59347e2428","web":"1:604347754233:web:7cd06e1c586856627e2428","windows":"1:604347754233:web:653a50877d3adc337e2428"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "focusbank-2026",
+          "appId": "1:604347754233:android:9ed1e974b00f59347e2428",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "focusbank-2026",
+          "configurations": {
+            "android": "1:604347754233:android:9ed1e974b00f59347e2428",
+            "web": "1:604347754233:web:7cd06e1c586856627e2428",
+            "windows": "1:604347754233:web:653a50877d3adc337e2428"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

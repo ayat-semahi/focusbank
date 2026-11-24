@@ -47,8 +47,12 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       // A known Firebase error (email already used, weak password...).
       return _messageFor(e);
-    } catch (_) {
-      // Any other unexpected error.
+    } on FirebaseException catch (e) {
+      print('FIRESTORE SIGNUP ERROR: ${e.code}');
+      print('FIRESTORE SIGNUP MESSAGE: ${e.message}');
+      return 'Database error: ${e.code}';
+    } catch (e) {
+      print('SIGNUP UNEXPECTED ERROR: $e');
       return 'Something went wrong, please try again';
     }
   }

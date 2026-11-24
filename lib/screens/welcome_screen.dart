@@ -4,6 +4,8 @@ import 'package:focusbank/theme/app_colors.dart';
 import 'package:focusbank/widgets/primary_button.dart';
 import 'package:focusbank/screens/login_screen.dart';
 import 'package:focusbank/screens/main_navigation.dart';
+import 'package:focusbank/screens/study_preferences_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:focusbank/state/app_state.dart';
 
 /// First screen: presents the app and leads to the login.
@@ -94,11 +96,17 @@ class WelcomeScreen extends StatelessWidget {
                         final user = FirebaseAuth.instance.currentUser;
                         if (user != null) {
                           await AppState.instance.loadUserDataFromFirestore(user.uid);
+                          final profileDoc = await FirebaseFirestore.instance
+                              .collection('users').doc(user.uid).get();
+                          final hasPreferences =
+                              profileDoc.data()?['studyPreferencesCompleted'] == true;
                           if (!context.mounted) return;
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const MainNavigationScreen(),
+                              builder: (_) => hasPreferences
+                                  ? const MainNavigationScreen()
+                                  : const StudyPreferencesScreen(),
                             ),
                           );
                         } else {

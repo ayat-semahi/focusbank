@@ -4,41 +4,78 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 
 class StudyPlanScreen extends StatefulWidget {
-  final Function(int) onNavigateTab;
+  final Function(String, int) onStartFocus;
 
-  const StudyPlanScreen({super.key, required this.onNavigateTab});
+  const StudyPlanScreen({super.key, required this.onStartFocus});
 
   @override
   State<StudyPlanScreen> createState() => _StudyPlanScreenState();
 }
 
 class _StudyPlanScreenState extends State<StudyPlanScreen> {
-  final List<String> _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  final List<String> _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
   String _selectedDay = 'Monday';
   bool _isGenerating = false;
 
-  void _regenerateAIPlan() async {
-    setState(() => _isGenerating = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    setState(() => _isGenerating = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.surfaceCard,
-        content: Row(
-          children: const [
-            Icon(Icons.auto_awesome, color: AppTheme.primaryGold, size: 20),
-            SizedBox(width: 10),
-            Text(
-              'AI Study Plan refreshed for your schedule!',
-              style: TextStyle(color: AppTheme.textWhite),
-            ),
-          ],
+  Future<void> _regenerateAIPlan() async {
+    setState(() => _isGenerating = true);
+
+    try {
+      await AppState.instance.generateAIStudyPlan();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.surfaceCard,
+          content: Row(
+            children: const [
+              Icon(
+                Icons.auto_awesome,
+                color: AppTheme.primaryGold,
+                size: 20,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'AI Study Plan generated successfully!',
+                  style: TextStyle(color: AppTheme.textWhite),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('Study plan generation failed: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            'Failed to generate your study plan. Please try again.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+      }
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -57,13 +94,13 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                 onPressed: _isGenerating ? null : _regenerateAIPlan,
                 icon: _isGenerating
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.primaryGold,
-                        ),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.primaryGold,
+                  ),
+                )
                     : const Icon(Icons.auto_awesome, color: AppTheme.primaryGold),
                 tooltip: 'Regenerate Plan with AI',
               ),
@@ -116,7 +153,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Aiming for: ${profile.academicGoal} • ${profile.preferredTime} focus blocks',
+                              'Aiming for: ${profile.academicGoal} â€¢ ${profile.preferredTime} focus blocks',
                               style: const TextStyle(
                                 color: AppTheme.textMuted,
                                 fontSize: 11,
@@ -164,32 +201,35 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                 // Schedule items list
                 Expanded(
                   child: dayItems.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wb_sunny_outlined, size: 40, color: AppTheme.textDim),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Rest day on $_selectedDay!\nUse coins to redeem a treat.',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: AppTheme.textMuted),
-                            ),
-                          ],
+                      ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wb_sunny_outlined, size: 40, color: AppTheme.textDim),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Rest day on $_selectedDay!\nUse coins to redeem a treat.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppTheme.textMuted),
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        itemCount: dayItems.length,
-                        itemBuilder: (context, index) {
-                          final item = dayItems[index];
-                          return _StudyBlockCard(
-                            item: item,
-                            onToggleComplete: () => state.toggleStudyPlanItem(item.id),
-                            onStartFocus: () => widget.onNavigateTab(1),
-                          );
-                        },
-                      ),
+                      ],
+                    ),
+                  )
+                      : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    itemCount: dayItems.length,
+                    itemBuilder: (context, index) {
+                      final item = dayItems[index];
+                      return _StudyBlockCard(
+                        item: item,
+                        onToggleComplete: () => state.toggleStudyPlanItem(item.id),
+                        onStartFocus: () => widget.onStartFocus(
+                          item.subject,
+                          item.durationMinutes,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -287,7 +327,7 @@ class _StudyBlockCard extends StatelessWidget {
             children: [
               Text(
                 item.isCompleted
-                    ? 'Completed ✓'
+                    ? 'Completed âœ“'
                     : 'Earn ~${item.durationMinutes} FocusCoins',
                 style: TextStyle(
                   color: item.isCompleted ? AppTheme.depositGreen : AppTheme.primaryGold,

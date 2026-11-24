@@ -52,7 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Success: fetch real user progress, balance, and weekly focus from Firestore
+    // Login is only for returning users: load their data and open the app.
+    // Study preferences are collected only during new account creation.
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await AppState.instance.loadUserDataFromFirestore(user.uid);
@@ -60,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    // Success: open Home and clear the previous screens from the stack.
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const MainNavigationScreen()),

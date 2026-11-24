@@ -8,7 +8,16 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 
 class TimerScreen extends StatefulWidget {
-  const TimerScreen({super.key});
+  final String? focusSubject;
+  final int? focusDurationMinutes;
+  final int focusRequestId;
+
+  const TimerScreen({
+    super.key,
+    this.focusSubject,
+    this.focusDurationMinutes,
+    this.focusRequestId = 0,
+  });
 
   @override
   State<TimerScreen> createState() => _TimerScreenState();
@@ -111,6 +120,31 @@ class _TimerScreenState extends State<TimerScreen> {
   void initState() {
     super.initState();
     _pausesUsed = 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant TimerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.focusRequestId != oldWidget.focusRequestId &&
+        widget.focusSubject != null &&
+        widget.focusDurationMinutes != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        final subject = widget.focusSubject!.trim();
+        final duration = widget.focusDurationMinutes!.clamp(5, 180);
+
+        setState(() {
+          _sessionNameController.text =
+          subject.isEmpty ? 'Focus session' : subject;
+          _selectedMinutes = duration;
+          _remainingSeconds = duration * 60;
+        });
+
+        _startSession();
+      });
+    }
   }
 
   @override
