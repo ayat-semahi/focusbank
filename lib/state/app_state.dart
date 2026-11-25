@@ -34,6 +34,7 @@ class AppState extends ChangeNotifier {
   bool _isLoggedIn = true;
   bool _isOnboarded = true;
   UserProfile? _profile;
+  bool _isGeneratingAIPlan = false;
 
   int? _balance = 0;
   int? _totalEarned = 0;
@@ -167,38 +168,56 @@ class AppState extends ChangeNotifier {
     return _safeStudyPlan.isNotEmpty;
   }
 
-  Future<void> generateAIStudyPlan() async {
-    final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null) {
-      throw Exception('You must be logged in to generate a study plan.');
-    }
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final preferences = await StudyPreferencesService().get(user.uid);
-
-      if (preferences == null) {
-        throw Exception('No study preferences found. Complete the study profile first.');
-      }
-
-      final generatedPlan = await GeminiService().generateWeeklyPlan(
-        preferences: preferences,
-      );
-
-      _studyPlan = generatedPlan;
-
-      await _saveStudyPlanToFirestore(user.uid);
-    } catch (e) {
-      debugPrint('AI study plan generation error: $e');
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+Future<void> generateAIStudyPlan() async {
+  // Prevent multiple simultaneous Gemini requests.
+  if (_isGeneratingAIPlan) {
+    debugPrint(
+      'AI plan generation already in progress. Skipping duplicate request.',
+    );
+    return;
   }
+
+  _isGeneratingAIPlan = true;
+
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user == null) {
+    _isGeneratingAIPlan = false;
+    throw Exception('You must be logged in to generate a study plan.');
+  }
+
+  _isLoading = true;
+  notifyListeners();
+
+  try {
+    final preferences =
+        await StudyPreferencesService().get(user.uid);
+
+    if (preferences == null) {
+      throw Exception(
+        'No study preferences found. Complete the study profile first.',
+      );
+    }
+
+    final generatedPlan =
+        await GeminiService().generateWeeklyPlan(
+      preferences: preferences,
+    );
+
+    _studyPlan = generatedPlan;
+
+    await _saveStudyPlanToFirestore(user.uid);
+  } catch (e) {
+    debugPrint('AI study plan generation error: $e');
+    rethrow;
+  } finally {
+    _isLoading = false;
+    _isGeneratingAIPlan = false;
+    notifyListeners();
+  }
+}
+
 
   /// Helper to format DateTime to 'YYYY-MM-DD'
   static String formatDateKey(DateTime date) {
