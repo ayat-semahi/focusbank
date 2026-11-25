@@ -107,7 +107,6 @@ class _StudyPreferencesScreenState extends State<StudyPreferencesScreen> {
             'Your preferences were saved, but AI plan generation failed. Please try again.',
           );
         }
-        return;
       }
 
       // 4. Open the existing navigation screen.

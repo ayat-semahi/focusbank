@@ -4,12 +4,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/study_plan_item.dart';
+import 'package:flutter/foundation.dart';
 
 class GeminiService {
   static const String _apiKey =
   String.fromEnvironment('GEMINI_API_KEY');
 
-static const String _model = 'gemini-3.5-flash-lite';
+static const String _model = 'gemini-3.8-flash';
 
   Future<List<StudyPlanItem>> generateWeeklyPlan({
     required Map<String, dynamic> preferences,
@@ -51,51 +52,62 @@ Return a JSON object containing a "sessions" array.
           '$_model:generateContent',
     );
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': _apiKey,
-      },
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': prompt}
-            ]
-          }
-        ],
-        'generationConfig': {
-          'responseMimeType': 'application/json',
-          'responseSchema': {
-            'type': 'OBJECT',
-            'properties': {
-              'sessions': {
-                'type': 'ARRAY',
-                'items': {
-                  'type': 'OBJECT',
-                  'properties': {
-                    'day': {'type': 'STRING'},
-                    'timeSlot': {'type': 'STRING'},
-                    'subject': {'type': 'STRING'},
-                    'objective': {'type': 'STRING'},
-                    'durationMinutes': {'type': 'INTEGER'},
-                  },
-                  'required': [
-                    'day',
-                    'timeSlot',
-                    'subject',
-                    'objective',
-                    'durationMinutes',
-                  ],
+late http.Response response;
+
+for (var attempt = 1; attempt <= 3; attempt++) {
+  response = await http.post(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': _apiKey,
+    },
+    body: jsonEncode({
+      'contents': [
+        {
+          'parts': [
+            {'text': prompt}
+          ]
+        }
+      ],
+      'generationConfig': {
+        'responseMimeType': 'application/json',
+        'responseSchema': {
+          'type': 'OBJECT',
+          'properties': {
+            'sessions': {
+              'type': 'ARRAY',
+              'items': {
+                'type': 'OBJECT',
+                'properties': {
+                  'day': {'type': 'STRING'},
+                  'timeSlot': {'type': 'STRING'},
+                  'subject': {'type': 'STRING'},
+                  'objective': {'type': 'STRING'},
+                  'durationMinutes': {'type': 'INTEGER'},
                 },
+                'required': [
+                  'day',
+                  'timeSlot',
+                  'subject',
+                  'objective',
+                  'durationMinutes',
+                ],
               },
             },
-            'required': ['sessions'],
           },
+          'required': ['sessions'],
         },
-      }),
-    );
+      },
+    }),
+  );
+
+  if (response.statusCode != 503 || attempt == 3) {
+    break;
+  }
+
+  debugPrint('Gemini overloaded. Retry $attempt in ${attempt * 2} seconds...');
+  await Future.delayed(Duration(seconds: attempt * 2));
+}
 
     final responseData =
     jsonDecode(response.body) as Map<String, dynamic>;
@@ -106,9 +118,9 @@ Return a JSON object containing a "sessions" array.
           ? error['message']?.toString()
           : null;
 
-      throw Exception(
-        message ?? 'Gemini request failed (${response.statusCode})',
-      );
+     throw Exception(
+  'Gemini HTTP ${response.statusCode}: ${message ?? response.body}',
+);
     }
 
     final candidates = responseData['candidates'] as List?;
