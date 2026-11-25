@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
@@ -9,6 +10,289 @@ import 'package:focusbank/services/auth_service.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  String _initialsFor(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppTheme.surfaceCard,
+        content: Text(message, style: const TextStyle(color: AppTheme.textWhite)),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context, AppState state) {
+    final profile = state.profile;
+    final nameController = TextEditingController(text: profile.name);
+    final careerController = TextEditingController(text: profile.dreamCareer);
+    final goalController = TextEditingController(text: profile.academicGoal);
+    final incomeController = TextEditingController(
+      text: profile.dreamIncome > 0 ? profile.dreamIncome.toStringAsFixed(0) : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.surfaceBorder),
+        ),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _dialogField(nameController, 'Name'),
+              const SizedBox(height: 12),
+              _dialogField(careerController, 'Dream Career'),
+              const SizedBox(height: 12),
+              _dialogField(goalController, 'Academic Goal'),
+              const SizedBox(height: 12),
+              _dialogField(
+                incomeController,
+                'Dream Monthly Income (\$)',
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final cleanName = nameController.text.trim();
+              final cleanCareer = careerController.text.trim();
+              if (cleanName.isEmpty || cleanCareer.isEmpty) {
+                _showSnack(context, 'Name and Dream Career cannot be empty.');
+                return;
+              }
+              final parsedIncome = double.tryParse(
+                incomeController.text.replaceAll(',', '').trim(),
+              );
+              Navigator.pop(ctx);
+              await state.updateProfile(
+                name: cleanName,
+                dreamCareer: cleanCareer,
+                academicGoal: goalController.text.trim().isEmpty
+                    ? profile.academicGoal
+                    : goalController.text.trim(),
+                dreamIncome: parsedIncome,
+              );
+              if (context.mounted) {
+                _showSnack(context, 'Profile updated.');
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogField(
+    TextEditingController controller,
+    String label, {
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: const TextStyle(color: AppTheme.textWhite),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: AppTheme.textMuted),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: AppTheme.primaryGold),
+        ),
+      ),
+    );
+  }
+
+  void _showTimerDurationDialog(BuildContext context, AppState state) {
+    const options = [25, 45, 60, 90];
+    int selected = state.defaultTimerMinutes;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppTheme.surfaceBorder),
+          ),
+          title: const Text(
+            'Default Timer Duration',
+            style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold),
+          ),
+          content: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options.map((mins) {
+              final isSelected = selected == mins;
+              return ChoiceChip(
+                label: Text('$mins min'),
+                selected: isSelected,
+                selectedColor: AppTheme.primaryGold,
+                backgroundColor: AppTheme.bgDark,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.black : AppTheme.textWhite,
+                  fontWeight: FontWeight.bold,
+                ),
+                onSelected: (_) => setDialogState(() => selected = mins),
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await state.updateSettings(defaultTimerMinutes: selected);
+                if (context.mounted) {
+                  _showSnack(context, 'Default session duration set to $selected min.');
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacyDialog(BuildContext context, AppState state) {
+    final userEmail =
+        FirebaseAuth.instance.currentUser?.email ?? state.profile.email;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.surfaceBorder),
+        ),
+        title: const Text(
+          'Privacy & Security',
+          style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Signed-in Account',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              userEmail.isEmpty ? 'Not available' : userEmail,
+              style: const TextStyle(
+                color: AppTheme.textWhite,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Your focus sessions, coins, custom rewards, and profile data are stored privately under your Firebase account.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          if (userEmail.isNotEmpty)
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await FirebaseAuth.instance
+                      .sendPasswordResetEmail(email: userEmail);
+                  if (context.mounted) {
+                    _showSnack(context, 'Password reset email sent to $userEmail.');
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    _showSnack(context, 'Could not send password reset email.');
+                  }
+                }
+              },
+              child: const Text('Reset Password'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.surfaceBorder),
+        ),
+        title: const Text(
+          'Help & FAQ',
+          style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold),
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'How do I earn FocusCoins?',
+                style: TextStyle(color: AppTheme.primaryGold, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Complete focus sessions in the Timer tab. You earn 1 FocusCoin per minute plus a +5 FC bonus for every 30 minutes.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'How does the Rewards Shop work?',
+                style: TextStyle(color: AppTheme.primaryGold, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Spend your FocusCoins on built-in or custom rewards. Your balance, custom rewards, and redemption counts sync with your account.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -16,6 +300,7 @@ class ProfileScreen extends StatelessWidget {
       builder: (context, _) {
         final state = AppState.instance;
         final profile = state.profile;
+        final initials = _initialsFor(profile.name);
 
         return Scaffold(
           backgroundColor: AppTheme.bgDark,
@@ -66,10 +351,21 @@ class ProfileScreen extends StatelessWidget {
                               0xFF6B8CAE,
                             ), // Slate blue avatar from screenshot
                           ),
-                          child: const Icon(
-                            Icons.person,
-                            size: 56,
-                            color: Colors.white,
+                          child: Center(
+                            child: initials.isNotEmpty
+                                ? Text(
+                                    initials,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 56,
+                                    color: Colors.white,
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -116,7 +412,7 @@ class ProfileScreen extends StatelessWidget {
                         child: _StatBox(
                           label: 'Earned',
                           value:
-                              '\$${state.balance.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                              '\$${state.totalEarned.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                           isEarned: true,
                         ),
                       ),
@@ -130,12 +426,15 @@ class ProfileScreen extends StatelessWidget {
                     _SettingsTile(
                       icon: Icons.edit_outlined,
                       title: 'Edit Profile',
-                      onTap: () {},
+                      onTap: () => _showEditProfileDialog(context, state),
                     ),
                     _SettingsTile(
                       icon: Icons.notifications_none,
                       title: 'Notifications',
-                      onTap: () {},
+                      trailingText: state.notificationsEnabled ? 'On' : 'Off',
+                      onTap: () => state.updateSettings(
+                        notificationsEnabled: !state.notificationsEnabled,
+                      ),
                     ),
                   ]),
                   const SizedBox(height: 18),
@@ -146,12 +445,16 @@ class ProfileScreen extends StatelessWidget {
                     _SettingsTile(
                       icon: Icons.timer_outlined,
                       title: 'Timer Duration',
-                      onTap: () {},
+                      trailingText: '${state.defaultTimerMinutes} min',
+                      onTap: () => _showTimerDurationDialog(context, state),
                     ),
                     _SettingsTile(
                       icon: Icons.do_not_disturb_on_outlined,
                       title: 'Do Not Disturb',
-                      onTap: () {},
+                      trailingText: state.doNotDisturbEnabled ? 'On' : 'Off',
+                      onTap: () => state.updateSettings(
+                        doNotDisturbEnabled: !state.doNotDisturbEnabled,
+                      ),
                     ),
                   ]),
                   const SizedBox(height: 18),
@@ -162,12 +465,12 @@ class ProfileScreen extends StatelessWidget {
                     _SettingsTile(
                       icon: Icons.shield_outlined,
                       title: 'Privacy & Security',
-                      onTap: () {},
+                      onTap: () => _showPrivacyDialog(context, state),
                     ),
                     _SettingsTile(
                       icon: Icons.help_outline,
                       title: 'Help & FAQ',
-                      onTap: () {},
+                      onTap: () => _showHelpDialog(context),
                     ),
                   ]),
                   const SizedBox(height: 26),
@@ -321,11 +624,13 @@ class _StatBox extends StatelessWidget {
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? trailingText;
   final VoidCallback onTap;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
+    this.trailingText,
     required this.onTap,
   });
 
@@ -343,10 +648,26 @@ class _SettingsTile extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
       ),
-      trailing: const Icon(
-        Icons.chevron_right,
-        color: AppTheme.textDim,
-        size: 18,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailingText != null) ...[
+            Text(
+              trailingText!,
+              style: const TextStyle(
+                color: AppTheme.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          const Icon(
+            Icons.chevron_right,
+            color: AppTheme.textDim,
+            size: 18,
+          ),
+        ],
       ),
     );
   }

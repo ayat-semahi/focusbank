@@ -36,11 +36,15 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
 
   int? _balance = 0;
+  int? _totalEarned = 0;
   int? _sessionCount = 0;
   int? _totalMinutesFocused = 0;
   int? _streakDays = 1;
   String? _lastActiveDate = '';
   DateTime? _accountCreatedAt;
+  bool _notificationsEnabled = true;
+  bool _doNotDisturbEnabled = false;
+  int _defaultTimerMinutes = 45;
 
   // Safe fallback storage for Web Hot-Reload safety
   static final Map<String, int> _fallbackDailyMinutes = <String, int>{};
@@ -99,7 +103,11 @@ class AppState extends ChangeNotifier {
   bool get isOnboarded => _isOnboarded;
   UserProfile get profile => _profile ??= UserProfile.defaultProfile();
   int get balance => _balance ?? 0;
+  int get totalEarned => _totalEarned ?? 0;
   int get sessionCount => _sessionCount ?? 0;
+  bool get notificationsEnabled => _notificationsEnabled;
+  bool get doNotDisturbEnabled => _doNotDisturbEnabled;
+  int get defaultTimerMinutes => _defaultTimerMinutes;
   int get streakDays => _streakDays ?? 1;
   int get totalMinutesFocused => _totalMinutesFocused ?? 0;
   double get totalHoursFocused => (_totalMinutesFocused ?? 0) / 60.0;
@@ -306,49 +314,51 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  static List<RewardItem> _defaultRewards() => [
+    RewardItem(
+      id: 'r_1',
+      title: '30m Gaming Break',
+      description: 'Play on PC / Console guilt-free',
+      costCoins: 35,
+      iconEmoji: '🎮',
+      category: 'Entertainment',
+    ),
+    RewardItem(
+      id: 'r_2',
+      title: '1 Episode of Netflix/Anime',
+      description: 'Watch your favorite series',
+      costCoins: 45,
+      iconEmoji: '🍿',
+      category: 'Entertainment',
+    ),
+    RewardItem(
+      id: 'r_3',
+      title: 'Specialty Coffee / Boba',
+      description: 'Treat yourself to your favorite drink',
+      costCoins: 60,
+      iconEmoji: '☕',
+      category: 'Treat',
+    ),
+    RewardItem(
+      id: 'r_4',
+      title: '20m Social Media Break',
+      description: 'Scroll guilt-free',
+      costCoins: 25,
+      iconEmoji: '📱',
+      category: 'Break',
+    ),
+    RewardItem(
+      id: 'r_5',
+      title: 'Weekend Celebration',
+      description: 'Full evening off with friends',
+      costCoins: 150,
+      iconEmoji: '🎉',
+      category: 'Treat',
+    ),
+  ];
+
   void _initDefaults() {
-    _rewards = [
-      RewardItem(
-        id: 'r_1',
-        title: '30m Gaming Break',
-        description: 'Play on PC / Console guilt-free',
-        costCoins: 35,
-        iconEmoji: '🎮',
-        category: 'Entertainment',
-      ),
-      RewardItem(
-        id: 'r_2',
-        title: '1 Episode of Netflix/Anime',
-        description: 'Watch your favorite series',
-        costCoins: 45,
-        iconEmoji: '🍿',
-        category: 'Entertainment',
-      ),
-      RewardItem(
-        id: 'r_3',
-        title: 'Specialty Coffee / Boba',
-        description: 'Treat yourself to your favorite drink',
-        costCoins: 60,
-        iconEmoji: '☕',
-        category: 'Treat',
-      ),
-      RewardItem(
-        id: 'r_4',
-        title: '20m Social Media Break',
-        description: 'Scroll guilt-free',
-        costCoins: 25,
-        iconEmoji: '📱',
-        category: 'Break',
-      ),
-      RewardItem(
-        id: 'r_5',
-        title: 'Weekend Celebration',
-        description: 'Full evening off with friends',
-        costCoins: 150,
-        iconEmoji: '🎉',
-        category: 'Treat',
-      ),
-    ];
+    _rewards = _defaultRewards();
 
     _generateStudyPlanFor(profile);
   }
@@ -430,10 +440,33 @@ class AppState extends ChangeNotifier {
       if (docData != null) {
         _profile = UserProfile.fromJson(docData);
         _balance = (docData['balance'] as num?)?.toInt() ?? 0;
+        _totalEarned = (docData['totalEarned'] as num?)?.toInt();
         _sessionCount = (docData['sessionCount'] as num?)?.toInt() ?? 0;
         _totalMinutesFocused = (docData['totalMinutesFocused'] as num?)?.toInt() ?? 0;
         _streakDays = (docData['streakDays'] as num?)?.toInt() ?? 1;
         _lastActiveDate = docData['lastActiveDate'] as String? ?? '';
+        _notificationsEnabled = docData['notificationsEnabled'] as bool? ?? true;
+        _doNotDisturbEnabled = docData['doNotDisturbEnabled'] as bool? ?? false;
+
+        final rawPrefs = docData['studyPreferences'];
+        final prefSessionMins = rawPrefs is Map
+            ? (rawPrefs['sessionMinutes'] as num?)?.toInt()
+            : null;
+        _defaultTimerMinutes =
+            (docData['defaultTimerMinutes'] as num?)?.toInt() ??
+                prefSessionMins ??
+                45;
+
+        final rawRewards = docData['rewards'];
+        if (rawRewards is List && rawRewards.isNotEmpty) {
+          final parsedRewards = rawRewards
+              .whereType<Map>()
+              .map((m) => RewardItem.fromJson(Map<String, dynamic>.from(m)))
+              .toList();
+          _rewards = parsedRewards.isNotEmpty ? parsedRewards : _defaultRewards();
+        } else {
+          _rewards = _defaultRewards();
+        }
 
         final rawCreatedAt = docData['createdAt'];
         if (rawCreatedAt is Timestamp) {
@@ -522,6 +555,18 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // Recover totalEarned for older accounts that don't have it stored yet
+      if (_totalEarned == null) {
+        int depositSum = 0;
+        for (final tx in _safeTransactions) {
+          if (tx.type == TransactionType.deposit) {
+            depositSum += tx.coins;
+          }
+        }
+        final currentBal = _balance ?? 0;
+        _totalEarned = depositSum > currentBal ? depositSum : currentBal;
+      }
+
       _isLoggedIn = true;
       _isOnboarded = true;
     } catch (e) {
@@ -561,11 +606,15 @@ class AppState extends ChangeNotifier {
   void logout() {
     _isLoggedIn = false;
     _balance = 0;
+    _totalEarned = 0;
     _sessionCount = 0;
     _totalMinutesFocused = 0;
     _streakDays = 1;
     _lastActiveDate = '';
     _accountCreatedAt = null;
+    _notificationsEnabled = true;
+    _doNotDisturbEnabled = false;
+    _defaultTimerMinutes = 45;
     _dailyFocusMinutes = {};
     _subjectFocusStats = {};
     _dailySubjectStats = {};
@@ -574,6 +623,8 @@ class AppState extends ChangeNotifier {
     _fallbackDailySubjectStats.clear();
     _transactions = [];
     _fallbackTransactions.clear();
+    _fallbackRewards.clear();
+    _rewards = _defaultRewards();
     _profile = UserProfile.defaultProfile();
     notifyListeners();
   }
@@ -598,6 +649,7 @@ class AppState extends ChangeNotifier {
     final totalCoins = minutesCompleted + bonus;
 
     _balance = balance + totalCoins;
+    _totalEarned = totalEarned + totalCoins;
     _totalMinutesFocused = totalMinutesFocused + minutesCompleted;
     _sessionCount = sessionCount + 1;
 
@@ -679,6 +731,7 @@ class AppState extends ChangeNotifier {
       DatabaseService.instance.saveUserProgress(
         uid: user.uid,
         balance: balance,
+        totalEarned: totalEarned,
         totalMinutesFocused: totalMinutesFocused,
         sessionCount: sessionCount,
         streakDays: streakDays,
@@ -718,12 +771,14 @@ class AppState extends ChangeNotifier {
       DatabaseService.instance.saveUserProgress(
         uid: user.uid,
         balance: balance,
+        totalEarned: totalEarned,
         totalMinutesFocused: totalMinutesFocused,
         sessionCount: sessionCount,
         streakDays: streakDays,
         lastActiveDate: lastActiveDate,
         dailyFocusMinutes: _safeDailyFocusMinutes,
         recentTransactions: _safeTransactions,
+        rewards: _safeRewards,
       );
     }
 
@@ -750,6 +805,90 @@ class AppState extends ChangeNotifier {
       ),
     );
     notifyListeners();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseService.instance.saveRewards(
+        uid: user.uid,
+        rewards: _safeRewards,
+      );
+    }
+  }
+
+  void deleteCustomReward(String id) {
+    final beforeLen = _safeRewards.length;
+    _safeRewards.removeWhere((r) => r.id == id && r.isCustom);
+    if (_safeRewards.length == beforeLen) return;
+    notifyListeners();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseService.instance.saveRewards(
+        uid: user.uid,
+        rewards: _safeRewards,
+      );
+    }
+  }
+
+  Future<void> updateProfile({
+    required String name,
+    required String dreamCareer,
+    String? academicGoal,
+    double? dreamIncome,
+  }) async {
+    _profile = profile.copyWith(
+      name: name,
+      dreamCareer: dreamCareer,
+      academicGoal: academicGoal ?? profile.academicGoal,
+      dreamIncome: dreamIncome ?? profile.dreamIncome,
+    );
+    notifyListeners();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await DatabaseService.instance.updateUserProfile(
+          uid: user.uid,
+          name: name,
+          dreamCareer: dreamCareer,
+          academicGoal: academicGoal,
+          dreamIncome: dreamIncome,
+        );
+      } catch (e) {
+        debugPrint('AppState.updateProfile error: $e');
+      }
+    }
+  }
+
+  Future<void> updateSettings({
+    bool? notificationsEnabled,
+    bool? doNotDisturbEnabled,
+    int? defaultTimerMinutes,
+  }) async {
+    if (notificationsEnabled != null) {
+      _notificationsEnabled = notificationsEnabled;
+    }
+    if (doNotDisturbEnabled != null) {
+      _doNotDisturbEnabled = doNotDisturbEnabled;
+    }
+    if (defaultTimerMinutes != null) {
+      _defaultTimerMinutes = defaultTimerMinutes;
+    }
+    notifyListeners();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await DatabaseService.instance.updateUserSettings(
+          uid: user.uid,
+          notificationsEnabled: notificationsEnabled,
+          doNotDisturbEnabled: doNotDisturbEnabled,
+          defaultTimerMinutes: defaultTimerMinutes,
+        );
+      } catch (e) {
+        debugPrint('AppState.updateSettings error: $e');
+      }
+    }
   }
 
   void toggleStudyPlanItem(String id) {

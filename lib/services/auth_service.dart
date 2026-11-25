@@ -33,6 +33,7 @@ class AuthService {
         'dreamCareer': dreamJob,
         'dreamIncome': dreamIncome,
         'balance': 0,
+        'totalEarned': 0,
         'sessionCount': 0,
         'totalMinutesFocused': 0,
         'streakDays': 1,

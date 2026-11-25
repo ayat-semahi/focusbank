@@ -31,13 +31,13 @@ class RewardItem {
   };
 
   factory RewardItem.fromJson(Map<String, dynamic> json) => RewardItem(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    description: json['description'] as String,
-    costCoins: json['costCoins'] as int,
-    iconEmoji: json['iconEmoji'] as String? ?? '🎁',
-    category: json['category'] as String? ?? 'Treat',
+    id: json['id']?.toString() ?? '',
+    title: json['title']?.toString() ?? 'Reward',
+    description: json['description']?.toString() ?? '',
+    costCoins: (json['costCoins'] as num?)?.toInt() ?? 0,
+    iconEmoji: json['iconEmoji']?.toString() ?? '🎁',
+    category: json['category']?.toString() ?? 'Treat',
     isCustom: json['isCustom'] as bool? ?? false,
-    timesRedeemed: json['timesRedeemed'] as int? ?? 0,
+    timesRedeemed: (json['timesRedeemed'] as num?)?.toInt() ?? 0,
   );
 }

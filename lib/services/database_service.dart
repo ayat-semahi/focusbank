@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import '../models/reward_item.dart';
 import '../models/transaction.dart';
 
 class DatabaseService {
@@ -26,6 +27,7 @@ class DatabaseService {
   Future<void> saveUserProgress({
     required String uid,
     required int balance,
+    int? totalEarned,
     required int totalMinutesFocused,
     required int sessionCount,
     required int streakDays,
@@ -34,6 +36,7 @@ class DatabaseService {
     Map<String, Map<String, dynamic>>? subjectFocusStats,
     Map<String, Map<String, Map<String, dynamic>>>? dailySubjectStats,
     List<BankTransaction>? recentTransactions,
+    List<RewardItem>? rewards,
   }) async {
     try {
       final payload = <String, dynamic>{
@@ -45,6 +48,9 @@ class DatabaseService {
         'dailyFocusMinutes': dailyFocusMinutes,
         'updatedAt': FieldValue.serverTimestamp(),
       };
+      if (totalEarned != null) {
+        payload['totalEarned'] = totalEarned;
+      }
       if (subjectFocusStats != null) {
         payload['subjectFocusStats'] = subjectFocusStats;
       }
@@ -55,6 +61,9 @@ class DatabaseService {
         payload['recentTransactions'] =
             recentTransactions.take(50).map((tx) => tx.toJson()).toList();
       }
+      if (rewards != null) {
+        payload['rewards'] = rewards.map((r) => r.toJson()).toList();
+      }
       await _db.collection('users').doc(uid).set(
         payload,
         SetOptions(merge: true),
@@ -62,6 +71,67 @@ class DatabaseService {
     } catch (e) {
       debugPrint('DatabaseService.saveUserProgress error: $e');
     }
+  }
+
+  /// Saves the user's rewards catalog (defaults + custom + redemption counts) in users/{uid}.
+  Future<void> saveRewards({
+    required String uid,
+    required List<RewardItem> rewards,
+  }) async {
+    try {
+      await _db.collection('users').doc(uid).set({
+        'rewards': rewards.map((r) => r.toJson()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('DatabaseService.saveRewards error: $e');
+    }
+  }
+
+  /// Updates editable profile fields in users/{uid}.
+  Future<void> updateUserProfile({
+    required String uid,
+    required String name,
+    required String dreamCareer,
+    double? dreamIncome,
+    String? academicGoal,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name,
+      'dreamCareer': dreamCareer,
+      'dreamJob': dreamCareer,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (dreamIncome != null) {
+      payload['dreamIncome'] = dreamIncome;
+    }
+    if (academicGoal != null) {
+      payload['academicGoal'] = academicGoal;
+    }
+    await _db.collection('users').doc(uid).set(payload, SetOptions(merge: true));
+  }
+
+  /// Updates user-specific app settings in users/{uid}.
+  Future<void> updateUserSettings({
+    required String uid,
+    bool? notificationsEnabled,
+    bool? doNotDisturbEnabled,
+    int? defaultTimerMinutes,
+  }) async {
+    final payload = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (notificationsEnabled != null) {
+      payload['notificationsEnabled'] = notificationsEnabled;
+    }
+    if (doNotDisturbEnabled != null) {
+      payload['doNotDisturbEnabled'] = doNotDisturbEnabled;
+    }
+    if (defaultTimerMinutes != null) {
+      payload['defaultTimerMinutes'] = defaultTimerMinutes;
+      payload['studyPreferences'] = {'sessionMinutes': defaultTimerMinutes};
+    }
+    await _db.collection('users').doc(uid).set(payload, SetOptions(merge: true));
   }
 
   /// Appends a new transaction document in users/{uid}/transactions

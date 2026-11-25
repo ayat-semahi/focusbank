@@ -81,10 +81,12 @@ class _ShopScreenState extends State<ShopScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (titleController.text.trim().isNotEmpty) {
-                final cost = int.tryParse(costController.text) ?? 30;
+              final title = titleController.text.trim();
+              if (title.isNotEmpty) {
+                final parsedCost = int.tryParse(costController.text.trim()) ?? 30;
+                final cost = parsedCost <= 0 ? 1 : parsedCost;
                 AppState.instance.addCustomReward(
-                  title: titleController.text.trim(),
+                  title: title,
                   description: 'Personal custom reward',
                   costCoins: cost,
                   emoji: emojiController.text.trim(),
@@ -192,7 +194,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceCard,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.primaryGold.withOpacity(0.4)),
+                  border: Border.all(color: AppTheme.primaryGold.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
@@ -276,7 +278,7 @@ class _ShopScreenState extends State<ShopScreen> {
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
                             color: item.isCustom
-                                ? AppTheme.primaryGold.withOpacity(0.4)
+                                ? AppTheme.primaryGold.withValues(alpha: 0.4)
                                 : AppTheme.surfaceBorder,
                           ),
                         ),
@@ -287,22 +289,42 @@ class _ShopScreenState extends State<ShopScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(item.iconEmoji, style: const TextStyle(fontSize: 28)),
-                                if (item.timesRedeemed > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.surfaceBorder,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      '×${item.timesRedeemed}',
-                                      style: const TextStyle(
-                                        color: AppTheme.textMuted,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (item.timesRedeemed > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.surfaceBorder,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '×${item.timesRedeemed}',
+                                          style: const TextStyle(
+                                            color: AppTheme.textMuted,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    if (item.isCustom) ...[
+                                      const SizedBox(width: 4),
+                                      InkWell(
+                                        onTap: () => state.deleteCustomReward(item.id),
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(2),
+                                          child: Icon(
+                                            Icons.delete_outline,
+                                            size: 16,
+                                            color: AppTheme.textMuted,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ],
                             ),
                             const Spacer(),
